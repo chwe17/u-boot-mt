@@ -51,6 +51,19 @@
  */
 #define CONFIG_NR_DRAM_BANKS		        1
 #define CONFIG_SYS_SDRAM_BASE		        0x80000000
+#if defined(ON_BOARD_1024Mb_DRAM_COMPONENT)
+#define CONFIG_SYS_SDRAM_SIZE               SZ_128M
+#elif defined(ON_BOARD_2048Mb_DRAM_COMPONENT) 
+#define CONFIG_SYS_SDRAM_SIZE               SZ_256M
+#elif defined(ON_BOARD_4096Mb_DRAM_COMPONENT)
+#define CONFIG_SYS_SDRAM_SIZE               SZ_512M
+#elif defined(ON_BOARD_8192Mb_DRAM_COMPONENT)
+#define CONFIG_SYS_SDRAM_SIZE               SZ_1G
+#elif defined(ON_BOARD_16384Mb_DRAM_COMPONENT)
+#define CONFIG_SYS_SDRAM_SIZE               SZ_2G
+#else
+#error "memory defined error!!!")
+#endif
 
 /* Code Layout */
 //#define CONFIG_SYS_TEXT_BASE		        0x80000000
@@ -63,6 +76,10 @@
                                                 CONFIG_SYS_UBOOT_MAX_SIZE - \
                                                 GENERATED_GBL_DATA_SIZE)
 
+
+#if (CONFIG_SYS_SDRAM_SIZE == SZ_128M) || (CONFIG_SYS_SDRAM_SIZE == SZ_256M) || \
+    (CONFIG_SYS_SDRAM_SIZE == SZ_512M) || (CONFIG_SYS_SDRAM_SIZE == SZ_1G) || \
+    (CONFIG_SYS_SDRAM_SIZE == SZ_2G)
 #define CONFIG_SYS_MALLOC_LEN               SZ_32M
 
 /* RichOS memory partitions */
@@ -79,6 +96,10 @@
  * the maximum mapped by the Linux kernel during initialization.
  */
 #define CONFIG_SYS_BOOTM_LEN	            0x4000000
+#else
+#error "memory partition error!!!"
+
+#endif
 
 /**********************************************************************************************
  *                                           Board
@@ -156,7 +177,6 @@
 #define CONFIG_ENV_OFFSET                   0xC0000
 #define CONFIG_NAND_UBOOT_OFFSET            0x40000
 #define CONFIG_NAND_LINUX_OFFSET            0x140000
-#define CONFIG_NAND_RECOVERY_OFFSET         0x2140000
 #define CONFIG_MAX_NAND_PAGE_SIZE       	2048
 #define CONFIG_MAX_NAND_BLOCK_SIZE      	131072
 #define CONFIG_MAX_UBOOT_SIZE   			393216	//262144
@@ -177,36 +197,13 @@
     " ${filesize};nand erase " __stringify(CONFIG_NAND_UBOOT_OFFSET) " ${img_align_size}" \
     ";nand write ${loadaddr} " __stringify(CONFIG_NAND_UBOOT_OFFSET) " ${img_align_size};reset; fi\0" 
 
-#define ENV_BOOT_WRITE_SEC_IMAGE \
-    "boot_wr_sec_img=image_check; if test ${img_result} = good; then image_blks " __stringify(CONFIG_MAX_NAND_PAGE_SIZE) \
-    " ${filesize};nand erase " __stringify(CONFIG_NAND_RECOVERY_OFFSET) " ${img_align_size}" \
-    ";nand write ${loadaddr} " __stringify(CONFIG_NAND_RECOVERY_OFFSET) " ${img_align_size}; fi\0" 
-
-#define ENV_BOOT_READ_SEC_IMAGE \
-    "boot_rd_sec_img=nand read ${loadaddr} " __stringify(CONFIG_NAND_RECOVERY_OFFSET) " 2000" \
-	";image_blks " __stringify(CONFIG_MAX_NAND_PAGE_SIZE) \
-	";nand read ${loadaddr} " __stringify(CONFIG_NAND_RECOVERY_OFFSET) " ${img_align_size}\0"
-
-#define ENV_DUIMAGE_RECOVERY \
-    "duimage_recovery=serious_image_check; if test ${img_result} = bad; then run boot_rd_sec_img" \
-    ";serious_image_check; if test ${img_result} = good; then reco_message; run boot_wr_img; fi; fi\0"
-
-#define ENV_DUIMAGE_BACKUP \
-   "duimage_backup=nand read ${loadaddr} " __stringify(CONFIG_NAND_RECOVERY_OFFSET) " 2000" \
-   ";image_check; if test ${img_result} = bad" \
-   ";then run boot_rd_img; serious_image_check; if test ${img_result} = good; then backup_message" \
-   ";run boot_wr_sec_img; fi; fi\0"
-
 #elif defined(ON_BOARD_EMMC_COMPONENT)
 /*EMMC Configuration*/
 /* Parallel Nor Flash */
 /* Build error elimination*/
 #define CONFIG_SYS_NO_FLASH
 /**/
-
-
-#define FEATURE_MMC_BOOT_MODE
-
+#define CONFIG_CMD_MMC
 #define CONFIG_ENV_IS_IN_MMC
 #define CONFIG_ENV_SIZE                     SZ_4K
 #define CONFIG_ENV_OFFSET                   0x600 
@@ -216,7 +213,6 @@
 #define CONFIG_EMMC_UBOOT_BLOCK             0x200 
 #define CONFIG_MAX_UBOOT_SIZE               0x200           // 0x200 * 512 = 256KB
 #define CONFIG_EMMC_LINUX_BLOCK             0xA00
-#define CONFIG_EMMC_RECOVERY_BLOCK          0x10A00
 
 #define ENV_BOOT_WRITE_IMAGE \
     "boot_wr_img=image_check; if test ${img_result} = good; then image_blks " __stringify(CONFIG_SYS_MAX_FLASH_SECT) \
@@ -231,25 +227,6 @@
     "wr_uboot=uboot_check;if test ${uboot_result} = good; then mmc device 0;mmc write ${loadaddr} " __stringify(CONFIG_EMMC_UBOOT_BLOCK) \
     " " __stringify(CONFIG_MAX_UBOOT_SIZE) ";reset; fi\0"
 
-#define ENV_BOOT_WRITE_SEC_IMAGE \
-    "boot_wr_sec_img=image_check; if test ${img_result} = good; then image_blks " __stringify(CONFIG_SYS_MAX_FLASH_SECT) \
-    " ${filesize};mmc device 0;mmc write ${loadaddr} " __stringify(CONFIG_EMMC_RECOVERY_BLOCK) " ${img_blks}; fi\0"
-
-#define ENV_DUIMAGE_RECOVERY \
-    "duimage_recovery=serious_image_check; if test ${img_result} = bad; then run boot_rd_sec_img" \
-    ";serious_image_check; if test ${img_result} = good; then reco_message; run boot_wr_img; fi; fi\0"
-
-
-#define ENV_BOOT_READ_SEC_IMAGE \
-    "boot_rd_sec_img=mmc device 0;mmc read ${loadaddr} " __stringify(CONFIG_EMMC_RECOVERY_BLOCK) " 1" \
-    ";image_blks " __stringify(CONFIG_SYS_MAX_FLASH_SECT) \
-    ";mmc read ${loadaddr} " __stringify(CONFIG_EMMC_RECOVERY_BLOCK) " ${img_blks}\0"
-
-#define ENV_DUIMAGE_BACKUP \
-   "duimage_backup=mmc device 0;mmc read ${loadaddr} " __stringify(CONFIG_EMMC_RECOVERY_BLOCK) " 1" \
-   ";image_check; if test ${img_result} = bad" \
-   ";then run boot_rd_img; serious_image_check; if test ${img_result} = good; then backup_message" \
-   ";run boot_wr_sec_img; fi; fi\0"
 
 #elif defined(OFF_BOARD_SD_CARD_COMPONENT)
 /*SD card configuration*/
@@ -272,20 +249,16 @@
 
 #define CONFIG_ENV_VARS_UBOOT_CONFIG
 
-#if defined(ON_BOARD_EMMC_COMPONENT) || defined(OFF_BOARD_SD_CARD_COMPONENT) || defined(FW_UPGRADE_BY_SDXC)
+#if defined(ON_BOARD_EMMC_COMPONENT) || defined(OFF_BOARD_SD_CARD_COMPONENT)
 /********************** MMC ***********************************/
 #define PART_DEBUG
-#define CONFIG_CMD_MMC
 #define CONFIG_MMC
-#define CONFIG_MEDIATEK_MMC
-
-#endif
-
 #define CONFIG_FS_FAT
 #define CONFIG_CMD_FAT
+#define CONFIG_MEDIATEK_MMC
+
 #define CONFIG_DOS_PARTITION
-/********************** GPIO *************************/
-//#define CONFIG_MTGPIO
+#endif
 
 /********************** Watchdog *************************/
 #define CONFIG_WATCHDOG_OFF
@@ -317,23 +290,7 @@
 
 #define RALINK_REG(x)		(*((volatile u32 *)(x)))
 
-/**********************USB**************************/
-#if defined(FW_UPGRADE_BY_USB)
 
-#define CONFIG_CMD_USB
-#define CONFIG_USB_STORAGE
-#define CONFIG_USB_HOST
-#define CONFIG_USB_XHCI
-//#define CONFIG_USB_XHCI_DWC3
-//#define CONFIG_USB_XHCI_OMAP
-#define CONFIG_SYS_USB_XHCI_MAX_ROOT_PORTS 2
-#define CONFIG_SYS_CACHELINE_SIZE	32
-#define CONFIG_FS_FAT
-#define CONFIG_CMD_FAT
-#define CONFIG_DOS_PARTITION
-//#define PART_DEBUG
-
-#endif
 /**********************************************************************************************
  *                                       Boot Menu
  **********************************************************************************************/
@@ -343,11 +300,6 @@
 #define CONFIG_MENU
 #define CONFIG_MENU_SHOW
 #define CONFIG_MENU_ACTIVE_ENTRY            2
-#define CONFIG_UPGFILE			    "root_uImage"
-
-#define USB_BOOT_MENU 
-#define SDcard_BOOT_MENU 
-#define Browser_BOOT_MENU 
 
 #define ENV_BOOT_CMD0 \
     "boot0=tftpboot; bootm\0"
@@ -355,10 +307,8 @@
 #define ENV_BOOT_CMD1 \
     "boot1=tftpboot;run boot_wr_img;run boot_rd_img;bootm\0"
 
-
 #define ENV_BOOT_CMD2 \
-    "boot2=run boot_rd_img;run rescue;bootm\0"
-//    "boot2=run boot_rd_img;bootm\0"
+    "boot2=run boot_rd_img;bootm\0"
 
 #define ENV_BOOT_CMD3 \
     "boot3=tftpboot ${loadaddr} u-boot-mtk.bin;run wr_uboot\0"
@@ -369,114 +319,24 @@
 #define ENV_BOOT_CMD5 \
     "boot5=loadb;run wr_uboot\0"
 
-#define ENV_BOOT_CMD6 \
-    "boot6=usb start;run boot_wr_img;bootm\0"
-
-#define ENV_BOOT_CMD7 \
-    "boot7=http_upgrade " __stringify(CONFIG_SERVERIP) ";run boot_wr_img;run boot_rd_img;bootm\0"
-
-#define ENV_BOOT_CMD8 \
-    "boot8=mmc init; fatload mmc 0:1 ${loadaddr} " __stringify(CONFIG_UPGFILE) ";run boot_wr_img; bootm\0"
-#define ENV_BOOT_CMD9 \
-    "boot9=mmc init; fatload mmc 0:1 ${loadaddr} ${bpi}/${board}/${service}/${kernel}; bootm\0"
-#define ENV_BOOT_CMD10 \
-    "boot10=mmc init; run boot_normal; bootm\0"
-#if defined(FW_UPGRADE_BY_USB)
-
-#undef USB_BOOT_MENU
-#define USB_BOOT_MENU \
-   "bootmenu_6=7. System Load Linux Kernel then write to Flash via USB.=run boot6\0"
-#define ENV_RESCUE_CMD \
-    "rescue=serious_image_check; if test ${img_result} = bad; then usb start;run boot_wr_img; fi\0"
-
-#elif defined(FW_UPGRADE_BY_SDXC)
-
-#undef SDcard_BOOT_MENU
-#define SDcard_BOOT_MENU \
-   "bootmenu_6=7. System Load Linux Kernel then write to Flash via SDcard.=run boot8\0"
-#define ENV_RESCUE_CMD \
-    "rescue=serious_image_check; if test ${img_result} = bad; then mmc init; fatload mmc 0:1 ${loadaddr} " \
-    __stringify(CONFIG_UPGFILE) ";run boot_wr_img; fi\0"
-
-#elif defined(FW_UPGRADE_BY_WEBUI)
-
-#undef Browser_BOOT_MENU
-#define Browser_BOOT_MENU \
-   "bootmenu_6=7. System Load Linux Kernel then write to Flash via Browser.=run boot7\0"
-#define ENV_RESCUE_CMD \
-    "rescue=serious_image_check; if test ${img_result} = bad; then http_upgrade " __stringify(CONFIG_SERVERIP) \
-    ";run boot_wr_img;run boot_rd_img; fi\0"
-
-#elif defined(DUAL_IMAGE_SUPPORT)
-
-#define ENV_RESCUE_CMD \
-    "rescue=serious_image_check; if test ${img_result} = bad; then run duimage_recovery;fi;run duimage_backup\0"
-#else
-
-#define ENV_RESCUE_CMD \
-    "rescue=serious_image_check;\0"
-#endif
-
 #define ENV_BOOT_CMD \
     ENV_BOOT_WRITE_IMAGE \
     ENV_BOOT_READ_IMAGE \
     ENV_WRITE_UBOOT \
-    ENV_DUIMAGE_RECOVERY \
-    ENV_BOOT_READ_SEC_IMAGE \
-    ENV_DUIMAGE_BACKUP \
-    ENV_BOOT_WRITE_SEC_IMAGE \
-    ENV_RESCUE_CMD \
     ENV_BOOT_CMD0 \
     ENV_BOOT_CMD1 \
     ENV_BOOT_CMD2 \
     ENV_BOOT_CMD3 \
     ENV_BOOT_CMD4 \
-    ENV_BOOT_CMD5 \
-    ENV_BOOT_CMD6 \
-    ENV_BOOT_CMD7 \
-    ENV_BOOT_CMD8 \
-    ENV_BOOT_CMD9 \
-    ENV_BOOT_CMD10 \
-    USB_BOOT_MENU \
-    Browser_BOOT_MENU \
-    SDcard_BOOT_MENU
-
+    ENV_BOOT_CMD5
 
 #define ENV_BOOT_MENU \
     "bootmenu_0=1. System Load Linux to SDRAM via TFTP.=run boot0\0" \
     "bootmenu_1=2. System Load Linux Kernel then write to Flash via TFTP.=run boot1\0" \
-    "bootmenu_2=3. Boot Linux from SD.=run boot10\0" \
+    "bootmenu_2=3. Boot system code via Flash.=run boot2\0" \
     "bootmenu_3=4. System Load Boot Loader then write to Flash via TFTP.=run boot3\0" \
     "bootmenu_4=5. System Load Linux Kernel then write to Flash via Serial.=run boot4\0" \
     "bootmenu_5=6. System Load Boot Loader then write to Flash via Serial.=run boot5\0" \
-    "bootmenu_6=7. Boot system code via Flash.=run boot2\0" \
-    "bootmenu_7=8. Boot Kernel 4.4.=run boot44\0" \
-    "bootmenu_8=9. Boot Kernel 4.9.=run boot49\0" \
-    "bootmenu_9=10. Boot Kernel 4.16.=run boot416\0" \
-    "boot44=mmc init; fatload mmc 0:1 ${loadaddr} ${bpi}/${board}/${service}/${kernel44}; bootm\0" \
-    "boot49=mmc init; fatload mmc 0:1 ${loadaddr} ${bpi}/${board}/${service}/${kernel49}; bootm\0" \
-    "boot416=run newloadenv; setenv kernel ${kernel416}; printenv; run newboot\0" \
-    "bpiver=1\0" \
-    "bpi=bananapi\0" \
-    "board=bpi-r2\0" \
-    "chip=MT7623N\0" \
-    "service=linux\0" \
-    "scriptaddr=0x83000000\0" \
-    "device=mmc\0" \
-    "partition=1:1\0" \
-    "kernel=uImage\0" \
-    "kernel44=uImage_4.4\0" \
-    "kernel49=uImage_4.9\0" \
-    "kernel414=uImage_4.14\0" \
-    "kernel416=uImage_4.16\0" \
-    "root=/dev/mmcblk0p2\0" \
-    "debug=7\0" \
-    "bootenv=uEnv.txt\0" \
-    "checksd=fatinfo ${device} 1:1\0" \
-    "loadbootenv=fatload ${device} ${partition} ${scriptaddr} ${bpi}/${board}/${service}/${bootenv} || fatload ${device} ${partition} ${scriptaddr} ${bootenv}\0" \
-    "boot_normal=if run checksd; then echo Boot from SD ; setenv partition 1:1; else echo Boot from eMMC ; mmc init 0 ; setenv partition 0:1 ; fi; if run loadbootenv; then echo Loaded environment from ${bootenv}; env import -t ${scriptaddr} ${filesize}; fi; run uenvcmd; fatload mmc 0:1 ${loadaddr} ${bpi}/${board}/${service}/${kernel}; bootm\0" \
-    "newloadenv=mmc init; run loadbootenv; env import -t ${scriptaddr} ${filesize};\0" \
-    "newboot=fatload mmc ${partition} ${loadaddr} ${bpi}/${board}/${service}/${kernel}; bootm\0" \
     "bootmenu_delay=30\0" \
     ""
 
@@ -490,8 +350,8 @@
  *                                       UBoot Command
  **********************************************************************************************/
 /* Shell */
-#define CONFIG_SYS_MAXARGS		            32
-#define CONFIG_SYS_PROMPT		            "BPI-IoT> "
+#define CONFIG_SYS_MAXARGS		            8
+#define CONFIG_SYS_PROMPT		            "MT7623> "
 #define CONFIG_COMMAND_HISTORY
 
 /* Commands */
