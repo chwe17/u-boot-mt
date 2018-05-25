@@ -68,7 +68,7 @@
 
 /* RichOS memory partitions */
 #define CONFIG_SYS_DECOMP_ADDR              0x80008000
-#define CONFIG_SYS_LOAD_ADDR                0x83000000
+#define CONFIG_SYS_LOAD_ADDR                0x84000000
 #define CONFIG_SYS_IMAGE_HDR_ADDR           CONFIG_SYS_LOAD_ADDR
 
 /* Linux DRAM definition */
@@ -287,12 +287,13 @@
 #define CONFIG_FS_FAT
 #define CONFIG_CMD_FAT
 #define CONFIG_DOS_PARTITION
-// add ext4 & zImage capabilities
+// add ext4, zImage & FDT capabilities
 #define CONFIG_FS_EXT4
 #define CONFIG_EXT4_WRITE
 #define CONFIG_CMD_EXT4
 #define CONFIG_CMD_FS_GENERIC
 #define CONFIG_CMD_BOOTZ
+#define CONFIG_OF_LIBFDT
 
 /********************** GPIO *************************/
 //#define CONFIG_MTGPIO
@@ -347,21 +348,70 @@
 
 /*
 Bootmenu is fully removed cause useless, remove the garbage bootargs probably set by the binary?
-There are a bunch of other variables set which might be better not there....                  
+There are a bunch of other variables set which might be better not there.... 
+This definition should give ~66MB for the Kernel, 512KB for bootscripts, 512KB for FDT and ~32MB for init Ramdisk.
+Keep in mind, that there's (yet) no 'fallback' in case something is to big! The bootlogic tries to boot first with 
+a bootscript defined in mmcscriptfile, in case this fails it tries to boot with zImage, uInitrd, and FDT in /boot/-(mmckernfile,
+mmcinitrdfile & mmcfdtfile), if this fails too it tries to boot with zImage and FDT only and finally it looks for a uImage
+in /boot/uImage. This can only work with 'appended device tree blob' (not used in Armbian) and uImages (also not default), 
+bootz with 'appended device tree blob' is not possible due to CONFIG_OF_LIBFDT. All bootoptions besides scriptboot will
+use defaultbooargs as bootargs! Currently there's no 'preboot logic', so it will only try to boot from the SD-Card.
 */
+
+#define DEFAULT_LINUX_BOOT_ENV \
+	"loadaddr=0x82000000\0" \
+	"kernel_addr_r=0x82000000\0" \
+	"scriptaddr=0x85F80000\0" \
+	"fdtaddr=0x86000000\0" \
+	"fdt_addr_r=0x86000000\0" \
+	"rdaddr=0x86080000\0" \
+	"ramdisk_addr_r=0x86080000\0" \
+	"bootm_size=0x10000000\0" \
+	"mmckernfile=boot/zImage\0" \
+	"mmcinitrdfile= boot/uInitrd\0" \
+	"mmcfdtfile=boot/dtb/mt7623n-bananapi-bpi-r2.dtb\0" \
+	"mmcscriptfile=boot/boot.scr\0" \
+	"mmctype=ext4\0" \
+	"mmcnum=1\0" \
+	"mmcpart=1\0" \
+	"defaultbooargs=earlyprintk initcall_debug console=ttyS0,115200n1 root=/dev/mmcblk0p1 rw rootfstype=ext4 rootwait audit=0\0"
 
 #define CONFIG_EXTRA_ENV_SETTINGS \
 	ENV_DEVICE_SETTINGS \
-	"setenv bootargs ""\0" \
-	"scriptaddr=0x83000000\0" \
-	"sdboot=mmc init 1; ext4load mmc 1:1 {scriptaddr} /boot/boot.scr; source\0" \
-	"emmcboot=mmc init 0; ext4load mmc 0:1 {scriptaddr} /boot/boot.scr; source\0"  \
-
+	DEFAULT_LINUX_BOOT_ENV \
+	"fileload=${mmctype}load mmc ${mmcnum}:${mmcpart} " \
+		"${loadaddr} ${mmcfile}\0" \
+	"kernload=setenv loadaddr ${kernel_addr_r};" \
+		"setenv mmcfile ${mmckernfile};" \
+		"run fileload\0" \
+	"initrdload=setenv loadaddr ${rdaddr};" \
+		"setenv mmcfile ${mmcinitrdfile};" \
+		"run fileload\0" \
+	"fdtload=setenv loadaddr ${fdtaddr};" \
+		"setenv mmcfile ${mmcfdtfile};" \
+		"run fileload\0" \
+	"scriptload=setenv loadaddr ${scriptaddr};" \
+		"setenv mmcfile ${mmcscriptfile};" \
+		"run fileload\0" \
+	"scriptboot=echo Running ${mmcscriptfile} from: mmc ${mmcnum}:${mmcpart} using ${mmcscriptfile};" \
+		"source ${scriptaddr}\0" \
+	"tryscriptboot=run scriptload;" \
+		"run scriptboot\0" \
+	"trybootinitrdfdt=run kernload; run initrdload; run fdtload;" \
+		"setenv bootargs ${defaultbooargs}; echo {bootargs};" \
+		"bootz ${kernel_addr_r} ${rdaddr} ${fdtaddr}\0" \
+	"trybootfdt=run kernload; run fdtload;" \
+		"setenv bootargs ${defaultbooargs}; echo {bootargs};" \
+		"bootz ${kernel_addr_r} - ${fdtaddr}\0"
+		
 /* eMMC booting ist not tested and **must be** considered as not working! */	
 #define CONFIG_BOOTCOMMAND \
-	"run sdboot;" \
-	"run emmcboot;" \
-	"echo" \
+	"mmc init 1;" \
+	"run tryscriptboot;" \
+	"run trybootinitrdfdt;" \
+	"run trybootfdt;" \
+	"echo Default bootoptions failed!"
+
 	
 #define CONFIG_BOOTDELAY                    3
 
